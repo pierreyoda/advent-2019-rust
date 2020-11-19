@@ -1,0 +1,16 @@
+[package]
+name = "advent-2019"
+version = "0.1.0"
+authors = ["pierreyoda@users.noreply.github.com"]
+edition = "2018"
+
+[lib]
+name = "advent_2019_common"
+path = "src/lib/lib.rs"
+
+[[bin]]
+name = "day-1"
+path = "src/day-1/main.rs"
+
+[dependencies]
+anyhow = "1.0.34"
