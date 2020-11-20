@@ -21,17 +21,17 @@ fn compute_compounded_fuel_requirements(mass: i32) -> i32 {
 
 fn main() -> Result<()> {
     // Part 1
-    run_with_scaffolding("day-1", |inputs| {
-        inputs
+    run_with_scaffolding("day-1", b'\n', |inputs| {
+        Ok(inputs
             .iter()
-            .fold(0, |sum, mass| sum + compute_fuel_requirements(*mass))
+            .fold(0, |sum, mass| sum + compute_fuel_requirements(*mass)))
     })?;
 
     // Part 2
-    run_with_scaffolding("day-1", |inputs| {
-        inputs.iter().fold(0, |sum, mass| {
+    run_with_scaffolding("day-1", b'\n', |inputs| {
+        Ok(inputs.iter().fold(0, |sum, mass| {
             sum + compute_compounded_fuel_requirements(*mass)
-        })
+        }))
     })?;
 
     Ok(())
