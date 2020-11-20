@@ -12,6 +12,10 @@ path = "src/lib/lib.rs"
 name = "day-1"
 path = "src/day-1/main.rs"
 
+[[bin]]
+name = "day-2"
+path = "src/day-2/main.rs"
+
 [dependencies]
 anyhow = "1.0.34"
 num-traits = "0.2.14"
