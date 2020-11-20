@@ -1,15 +1,18 @@
-use advent_2019_common::load_inputs_from_file;
+use anyhow::Result;
+
+use advent_2019_common::run_with_scaffolding;
 
 fn compute_fuel_requirements(mass: i64) -> i64 {
     (mass / 3) - 2
 }
-fn main() {
-    println!("Advent 2019 - Day 1");
-    let inputs = load_inputs_from_file("./src/day-1/input.txt").expect("Input error.");
-    let total_fuel_required = inputs
-        .iter()
-        .fold(0, |sum, mass| sum + compute_fuel_requirements(*mass));
-    println!("Answer: {}", total_fuel_required);
+fn main() -> Result<()> {
+    run_with_scaffolding("day-1", |inputs| {
+        inputs
+            .iter()
+            .fold(0, |sum, mass| sum + compute_fuel_requirements(*mass))
+    })?;
+
+    Ok(())
 }
 
 #[cfg(test)]
