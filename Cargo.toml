@@ -2,7 +2,7 @@
 name = "advent-2019"
 version = "0.1.0"
 authors = ["pierreyoda@users.noreply.github.com"]
-edition = "2018"
+edition = "2021"
 
 [lib]
 name = "advent_2019_common"
@@ -17,5 +17,5 @@ name = "day-2"
 path = "src/day-2/main.rs"
 
 [dependencies]
-anyhow = "1.0.34"
-num-traits = "0.2.14"
+anyhow = "1.0.93"
+num-traits = "0.2.19"
