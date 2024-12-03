@@ -1,30 +1,53 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Context, Error, Result};
 
-use advent_2019_common::run_with_scaffolding;
-use num_traits::clamp;
+use advent_2019_common::{run_day_puzzle_solver, DayPuzzlePart};
 
 type Scalar = usize;
 
-type MemoryBank = Vec<Scalar>;
-
-trait Memory {
-    fn get_scalar_at(&self, index: usize) -> Result<Scalar>;
-    fn set_scalar_at(&mut self, index: usize, value: Scalar) -> Result<()>;
+#[derive(Clone, Debug)]
+struct MemoryBank {
+    tape: Vec<Scalar>,
 }
 
-impl Memory for MemoryBank {
-    fn get_scalar_at(&self, index: usize) -> Result<Scalar> {
-        self.get(index)
-            .copied()
-            .with_context(|| format!("Memory overflow on read at index {}", index))
+impl TryFrom<String> for MemoryBank {
+    type Error = Error;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let split = value.split(',');
+        let mut tape = Vec::with_capacity(split.size_hint().0);
+        for part in split {
+            let part_scalar = part
+                .parse()
+                .with_context(|| format!("cannot parse tape scalar: {}", part))?;
+            tape.push(part_scalar);
+        }
+        Ok(Self { tape })
+    }
+}
+
+impl MemoryBank {
+    pub fn new(tape: Vec<Scalar>) -> Self {
+        Self { tape }
     }
 
-    fn set_scalar_at(&mut self, index: usize, value: Scalar) -> Result<()> {
+    pub fn get_scalar_at(&self, index: usize) -> Result<Scalar> {
+        self.tape
+            .get(index)
+            .with_context(|| format!("Memory overflow on read at index {}", index))
+            .copied()
+    }
+
+    pub fn set_scalar_at(&mut self, index: usize, value: Scalar) -> Result<()> {
         let reference = self
+            .tape
             .get_mut(index)
             .with_context(|| format!("Memory overflow on write at index {}", index))?;
         *reference = value;
         Ok(())
+    }
+
+    pub fn raw(&self) -> &Vec<Scalar> {
+        &self.tape
     }
 }
 
@@ -40,13 +63,13 @@ const OPERATION_CODE_HALT: Scalar = 99;
 impl VirtualMachine {
     pub fn from_tape(tape: &[Scalar]) -> Self {
         Self {
-            memory: tape.to_vec(),
+            memory: MemoryBank::new(tape.to_vec()),
             program_counter: 0,
         }
     }
 
     pub fn reset(&mut self, tape: &[Scalar]) {
-        self.memory = tape.to_vec();
+        self.memory = MemoryBank::new(tape.to_vec());
         self.program_counter = 0;
     }
 
@@ -68,7 +91,6 @@ impl VirtualMachine {
             return Ok(true);
         }
         self.program_counter += 4;
-        self.program_counter = clamp(self.program_counter, 0, self.memory.len() - 1);
         Ok(false)
     }
 
@@ -100,7 +122,7 @@ impl Instruction {
         }
     }
 
-    pub fn decode(pc: usize, code: Scalar, memory: &dyn Memory) -> Result<Self> {
+    pub fn decode(pc: usize, code: Scalar, memory: &MemoryBank) -> Result<Self> {
         let is_add = match code {
             OPERATION_CODE_ADD => true,
             OPERATION_CODE_MULTIPLY => false,
@@ -122,7 +144,7 @@ impl Instruction {
     }
 
     /// Returns true for a `HALT` opcode.
-    pub fn apply(&self, memory: &mut dyn Memory) -> Result<bool> {
+    pub fn apply(&self, memory: &mut MemoryBank) -> Result<bool> {
         Ok(match *self {
             Instruction::Add(lhs_at, rhs_at, output_at) => {
                 let (lhs, rhs) = (memory.get_scalar_at(lhs_at)?, memory.get_scalar_at(rhs_at)?);
@@ -172,14 +194,18 @@ fn compute_solution_2(tape: &[Scalar]) -> Result<Scalar> {
 
 fn main() -> Result<()> {
     // Part 1
-    run_with_scaffolding("day-2", b',', |mut tape| {
-        *tape.get_mut(1).unwrap() = 12;
-        *tape.get_mut(2).unwrap() = 2;
-        compute_solution_1(&tape)
+    let _ = run_day_puzzle_solver(2, DayPuzzlePart::One, b'\n', |input: Vec<MemoryBank>| {
+        let mut memory_bank = input[0].clone();
+        memory_bank.set_scalar_at(1, 12)?;
+        memory_bank.set_scalar_at(2, 2)?;
+        Ok(compute_solution_1(memory_bank.raw()))
     })?;
 
     // Part 2
-    run_with_scaffolding("day-2", b',', |mut tape| compute_solution_2(&tape))?;
+    let _ = run_day_puzzle_solver(2, DayPuzzlePart::One, b'\n', |input: Vec<MemoryBank>| {
+        let memory_bank = input[0].clone();
+        Ok(compute_solution_2(memory_bank.raw()))
+    })?;
 
     Ok(())
 }
@@ -192,34 +218,34 @@ mod tests {
     fn test_virtual_machine_stepping() {
         let tape_1 = [1, 9, 10, 3, 2, 3, 11, 0, 99, 30, 40, 50];
         let mut vm = VirtualMachine::from_tape(&tape_1);
-        assert_eq!(vm.memory_snapshot(), &tape_1);
+        assert_eq!(vm.memory_snapshot().raw(), &tape_1);
 
         let tape_2 = [1, 9, 10, 70, 2, 3, 11, 0, 99, 30, 40, 50];
         vm.step().unwrap();
-        assert_eq!(vm.memory_snapshot(), &tape_2);
+        assert_eq!(vm.memory_snapshot().raw(), &tape_2);
 
         let tape_3 = [3500, 9, 10, 70, 2, 3, 11, 0, 99, 30, 40, 50];
         vm.step().unwrap();
-        assert_eq!(vm.memory_snapshot(), &tape_3);
+        assert_eq!(vm.memory_snapshot().raw(), &tape_3);
     }
 
     #[test]
     fn test_virtual_machine_running() {
         let mut vm1 = VirtualMachine::from_tape(&[1, 0, 0, 0, 99]);
         vm1.run().unwrap();
-        assert_eq!(vm1.memory_snapshot(), &[2, 0, 0, 0, 99]);
+        assert_eq!(vm1.memory_snapshot().raw(), &[2, 0, 0, 0, 99]);
 
         let mut vm2 = VirtualMachine::from_tape(&[2, 3, 0, 3, 99]);
         vm2.run().unwrap();
-        assert_eq!(vm2.memory_snapshot(), &[2, 3, 0, 6, 99]);
+        assert_eq!(vm2.memory_snapshot().raw(), &[2, 3, 0, 6, 99]);
 
         let mut vm3 = VirtualMachine::from_tape(&[2, 4, 4, 5, 99, 0]);
         vm3.run().unwrap();
-        assert_eq!(vm3.memory_snapshot(), &[2, 4, 4, 5, 99, 9801]);
+        assert_eq!(vm3.memory_snapshot().raw(), &[2, 4, 4, 5, 99, 9801]);
 
         let mut vm4 = VirtualMachine::from_tape(&[1, 1, 1, 4, 99, 5, 6, 0, 99]);
         vm4.run().unwrap();
-        assert_eq!(vm4.memory_snapshot(), &[30, 1, 1, 4, 2, 5, 6, 0, 99]);
+        assert_eq!(vm4.memory_snapshot().raw(), &[30, 1, 1, 4, 2, 5, 6, 0, 99]);
     }
 
     #[test]
@@ -227,14 +253,20 @@ mod tests {
         let tape_1 = [1, 1, 1, 4, 99, 5, 6, 0, 99];
         let mut vm = VirtualMachine::from_tape(&tape_1);
         assert_eq!(vm.program_counter_snapshot(), 0);
-        assert_eq!(vm.memory_snapshot(), &tape_1);
+        assert_eq!(vm.memory_snapshot().raw(), &tape_1);
 
         vm.step().unwrap();
         assert_eq!(vm.program_counter_snapshot(), 4);
-        assert_eq!(vm.memory_snapshot(), &vec![1, 1, 1, 4, 2, 5, 6, 0, 99]);
+        assert_eq!(
+            vm.memory_snapshot().raw(),
+            &vec![1, 1, 1, 4, 2, 5, 6, 0, 99]
+        );
 
         vm.step().unwrap();
         assert_eq!(vm.program_counter_snapshot(), 8);
-        assert_eq!(vm.memory_snapshot(), &vec![30, 1, 1, 4, 2, 5, 6, 0, 99]);
+        assert_eq!(
+            vm.memory_snapshot().raw(),
+            &vec![30, 1, 1, 4, 2, 5, 6, 0, 99]
+        );
     }
 }

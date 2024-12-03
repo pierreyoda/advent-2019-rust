@@ -1,13 +1,27 @@
-use anyhow::Result;
+use anyhow::{Context, Error, Result};
 
-use advent_2019_common::run_with_scaffolding;
+use advent_2019_common::{run_day_puzzle_solver, DayPuzzlePart};
+
+pub struct Mass(i32);
+
+impl TryFrom<String> for Mass {
+    type Error = Error;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Ok(Self {
+            0: value
+                .parse()
+                .with_context(|| format!("Mass: cannot parse raw input: {}", value))?,
+        })
+    }
+}
 
 fn compute_fuel_requirements(mass: i32) -> i32 {
     (mass / 3) - 2
 }
 
 fn compute_compounded_fuel_requirements(mass: i32) -> i32 {
-    // avoid recursivity to prevent stack overflow
+    // avoid recursion to prevent stack overflow
     let mut final_mass = compute_fuel_requirements(mass);
     let mut fuel_additional_mass = compute_fuel_requirements(final_mass);
 
@@ -21,16 +35,16 @@ fn compute_compounded_fuel_requirements(mass: i32) -> i32 {
 
 fn main() -> Result<()> {
     // Part 1
-    run_with_scaffolding("day-1", b'\n', |inputs| {
-        Ok(inputs
+    run_day_puzzle_solver(1, DayPuzzlePart::One, b'\n', |input: Vec<Mass>| {
+        Ok(input
             .iter()
-            .fold(0, |sum, mass| sum + compute_fuel_requirements(*mass)))
+            .fold(0, |sum, mass| sum + compute_fuel_requirements(mass.0)))
     })?;
 
     // Part 2
-    run_with_scaffolding("day-1", b'\n', |inputs| {
-        Ok(inputs.iter().fold(0, |sum, mass| {
-            sum + compute_compounded_fuel_requirements(*mass)
+    run_day_puzzle_solver(1, DayPuzzlePart::Two, b'\n', |input: Vec<Mass>| {
+        Ok(input.iter().fold(0, |sum, mass| {
+            sum + compute_compounded_fuel_requirements(mass.0)
         }))
     })?;
 

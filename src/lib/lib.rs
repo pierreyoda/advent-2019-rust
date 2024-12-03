@@ -1,58 +1,87 @@
-use std::str::from_utf8;
+use std::fmt::Debug;
 use std::{
-    fmt::Display,
     fs::File,
     io::{BufRead, BufReader},
     path::Path,
-    str::FromStr,
     time::Instant,
 };
 
-use anyhow::Result;
-use num_traits::Num;
+use anyhow::{Context, Error, Result};
+use colored::*;
 
-pub fn load_inputs_from_file<N, P>(path: P, separator: u8) -> Result<Vec<N>>
+fn parse_inputs_from_file<T, P>(path: P, separator: u8) -> Result<Vec<T>>
 where
-    N: Copy + Num + Ord + FromStr,
+    T: TryFrom<String, Error = Error>,
     P: AsRef<Path>,
 {
     let file = File::open(path)?;
-    let lines = BufReader::new(file);
-    Ok(lines
-        .split(separator)
-        .into_iter()
-        // TODO: avoid unwrap
-        .map(|l| {
-            let raw = l.unwrap();
-            let string = from_utf8(&raw).unwrap();
-            string.parse()
-        })
-        .filter_map(Result::ok)
-        .collect())
+    let content = BufReader::new(file);
+    let lines = content.split(separator);
+    let mut parsed_lines = Vec::with_capacity(lines.size_hint().0);
+    for (i, bytes_line_result) in lines.enumerate() {
+        let bytes_line = bytes_line_result.with_context(|| {
+            format!("parse_inputs_from_file cannot read line with index: {}", i)
+        })?;
+        let raw_line = String::from_utf8(bytes_line).with_context(|| {
+            format!(
+                "parse_inputs_from_file cannot stringify line with index: {}",
+                i
+            )
+        })?;
+        parsed_lines.push(T::try_from(raw_line)?);
+    }
+    Ok(parsed_lines)
 }
 
-pub fn run_with_scaffolding<N, F>(
-    label: &'static str,
-    inputs_separator: u8,
-    compute: F,
-) -> Result<N>
-where
-    N: Copy + Num + Ord + FromStr + Display,
-    F: Fn(Vec<N>) -> Result<N>,
-{
-    // Read input(s)
-    let input_start = Instant::now();
-    let input = load_inputs_from_file(format!("./src/{}/input.txt", label), inputs_separator)?;
-    let input_time = input_start.elapsed();
-    println!("Inputs read in {:?}", input_time);
+#[derive(Debug)]
+pub enum DayPuzzlePart {
+    One,
+    Two,
+}
 
-    // Run computing function
+impl DayPuzzlePart {
+    pub fn as_word(&self) -> &str {
+        match self {
+            DayPuzzlePart::One => "One",
+            DayPuzzlePart::Two => "Two",
+        }
+    }
+}
+
+pub fn run_day_puzzle_solver<T, C, O>(
+    day_number: usize,
+    part: DayPuzzlePart,
+    separator: u8,
+    compute: C,
+) -> Result<O>
+where
+    T: TryFrom<String, Error = Error>,
+    C: FnOnce(Vec<T>) -> Result<O>,
+    O: Debug,
+{
+    println!(
+        "{}",
+        format!("=== Day {} - Part {} ===", day_number, part.as_word()).bright_blue()
+    );
+
+    // Read input
+    let input_start = Instant::now();
+    let parsed_input: Vec<T> =
+        parse_inputs_from_file(format!("./src/day-{}/input.txt", day_number), separator)?;
+    println!(
+        "{}",
+        format!("=> Input read in {:?}", input_start.elapsed()).cyan()
+    );
+
+    // Computing function
     let compute_start = Instant::now();
-    let output = compute(input)?;
-    let compute_time = compute_start.elapsed();
-    println!("Computing done in {:?}", compute_time);
+    let output = compute(parsed_input)?;
+    println!(
+        "{}",
+        format!("=> Computing done in {:?}", compute_start.elapsed()).cyan()
+    );
 
     // Output
-    println!("Result = {}", output);
+    println!("{}\n", format!("=> Result = {:?}", output).green());
     Ok(output)
 }
