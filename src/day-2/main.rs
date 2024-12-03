@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 
 use advent_2019_common::run_with_scaffolding;
 use num_traits::clamp;
@@ -8,25 +8,22 @@ type Scalar = usize;
 type MemoryBank = Vec<Scalar>;
 
 trait Memory {
-    fn get_scalar_at(&self, index: &usize) -> Result<Scalar>;
-    fn set_scalar_at(&mut self, index: &usize, value: Scalar) -> Result<()>;
+    fn get_scalar_at(&self, index: usize) -> Result<Scalar>;
+    fn set_scalar_at(&mut self, index: usize, value: Scalar) -> Result<()>;
 }
 
 impl Memory for MemoryBank {
-    fn get_scalar_at(&self, index: &usize) -> Result<Scalar> {
-        Ok(*self
-            .get(*index)
-            .ok_or(format!("Memory overflow at index {}", index))
-            .unwrap()) // TODO: find out how to easily convert error to anyhow)
+    fn get_scalar_at(&self, index: usize) -> Result<Scalar> {
+        self.get(index)
+            .copied()
+            .with_context(|| format!("Memory overflow on read at index {}", index))
     }
 
-    fn set_scalar_at(&mut self, index: &usize, value: Scalar) -> Result<()> {
-        let reference: &mut Scalar = self
-            .get_mut(*index)
-            .ok_or(format!("Memory overflow at index {}", index))
-            .unwrap(); // TODO: same here
+    fn set_scalar_at(&mut self, index: usize, value: Scalar) -> Result<()> {
+        let reference = self
+            .get_mut(index)
+            .with_context(|| format!("Memory overflow on write at index {}", index))?;
         *reference = value;
-
         Ok(())
     }
 }
@@ -49,22 +46,25 @@ impl VirtualMachine {
     }
 
     pub fn run(&mut self) -> Result<()> {
-        loop {
-            if !self.step()? {
-                break;
+        'vm: loop {
+            if self.step()? {
+                break 'vm;
             }
         }
         Ok(())
     }
 
+    /// Returns true if the program must be halted.
     pub fn step(&mut self) -> Result<bool> {
-        let current_step = self.memory.get_scalar_at(&self.program_counter)?;
+        let current_step = self.memory.get_scalar_at(self.program_counter)?;
         let decoded_operation =
             Operation::decode(self.program_counter, current_step, &self.memory)?;
-        let halt = decoded_operation.apply(&mut self.memory)?;
-        self.program_counter += if halt { 1 } else { 4 };
+        if decoded_operation.apply(&mut self.memory)? {
+            return Ok(true);
+        }
+        self.program_counter += 4;
         self.program_counter = clamp(self.program_counter, 0, self.memory.len() - 1);
-        Ok(halt)
+        Ok(false)
     }
 
     pub fn program_counter_snapshot(&self) -> usize {
@@ -76,9 +76,13 @@ impl VirtualMachine {
     }
 }
 
+#[derive(Debug)]
 enum Operation {
+    /// Structure: (lhs_at, rhs_at, output_at)
     Add(usize, usize, usize),
+    /// Structure: (lhs_at, rhs_at, output_at)
     Multiply(usize, usize, usize),
+    /// Immediately halts the program.
     Halt,
 }
 
@@ -87,7 +91,7 @@ impl Operation {
         match *self {
             Operation::Add(_, _, _) => OPERATION_CODE_ADD,
             Operation::Multiply(_, _, _) => OPERATION_CODE_MULTIPLY,
-            Operation::Halt => OPERATION_CODE_MULTIPLY,
+            Operation::Halt => OPERATION_CODE_HALT,
         }
     }
 
@@ -100,9 +104,9 @@ impl Operation {
         };
 
         let (lhs_at, rhs_at, output_at) = (
-            memory.get_scalar_at(&(pc + 1))?,
-            memory.get_scalar_at(&(pc + 2))?,
-            memory.get_scalar_at(&(pc + 3))?,
+            memory.get_scalar_at(pc + 1)?,
+            memory.get_scalar_at(pc + 2)?,
+            memory.get_scalar_at(pc + 3)?,
         );
 
         Ok((if is_add {
@@ -112,26 +116,19 @@ impl Operation {
         })(lhs_at, rhs_at, output_at))
     }
 
+    /// Returns true for a `HALT` opcode.
     pub fn apply(&self, memory: &mut dyn Memory) -> Result<bool> {
         Ok(match *self {
             Operation::Add(lhs_at, rhs_at, output_at) => {
-                let (lhs, rhs) = (
-                    memory.get_scalar_at(&lhs_at)?,
-                    memory.get_scalar_at(&rhs_at)?,
-                );
+                let (lhs, rhs) = (memory.get_scalar_at(lhs_at)?, memory.get_scalar_at(rhs_at)?);
                 let result = lhs + rhs;
-                memory.set_scalar_at(&output_at, result)?;
-
+                memory.set_scalar_at(output_at, result)?;
                 false
             }
             Operation::Multiply(lhs_at, rhs_at, output_at) => {
-                let (lhs, rhs) = (
-                    memory.get_scalar_at(&lhs_at)?,
-                    memory.get_scalar_at(&rhs_at)?,
-                );
+                let (lhs, rhs) = (memory.get_scalar_at(lhs_at)?, memory.get_scalar_at(rhs_at)?);
                 let result = lhs * rhs;
-                memory.set_scalar_at(&output_at, result)?;
-
+                memory.set_scalar_at(output_at, result)?;
                 false
             }
             Operation::Halt => true,
@@ -146,10 +143,7 @@ fn main() -> Result<()> {
 
         let mut vm = VirtualMachine::from_tape(tape);
         vm.run()?;
-
-        dbg!(vm.memory_snapshot());
-
-        vm.memory_snapshot().get_scalar_at(&0)
+        vm.memory_snapshot().get_scalar_at(0)
     })?;
 
     Ok(())
