@@ -38,11 +38,16 @@ const OPERATION_CODE_MULTIPLY: Scalar = 2;
 const OPERATION_CODE_HALT: Scalar = 99;
 
 impl VirtualMachine {
-    pub fn from_tape(inputs: Vec<usize>) -> Self {
+    pub fn from_tape(tape: &[Scalar]) -> Self {
         Self {
-            memory: inputs,
+            memory: tape.to_vec(),
             program_counter: 0,
         }
+    }
+
+    pub fn reset(&mut self, tape: &[Scalar]) {
+        self.memory = tape.to_vec();
+        self.program_counter = 0;
     }
 
     pub fn run(&mut self) -> Result<()> {
@@ -58,7 +63,7 @@ impl VirtualMachine {
     pub fn step(&mut self) -> Result<bool> {
         let current_step = self.memory.get_scalar_at(self.program_counter)?;
         let decoded_operation =
-            Operation::decode(self.program_counter, current_step, &self.memory)?;
+            Instruction::decode(self.program_counter, current_step, &self.memory)?;
         if decoded_operation.apply(&mut self.memory)? {
             return Ok(true);
         }
@@ -77,7 +82,7 @@ impl VirtualMachine {
 }
 
 #[derive(Debug)]
-enum Operation {
+enum Instruction {
     /// Structure: (lhs_at, rhs_at, output_at)
     Add(usize, usize, usize),
     /// Structure: (lhs_at, rhs_at, output_at)
@@ -86,12 +91,12 @@ enum Operation {
     Halt,
 }
 
-impl Operation {
+impl Instruction {
     pub fn code(&self) -> Scalar {
         match *self {
-            Operation::Add(_, _, _) => OPERATION_CODE_ADD,
-            Operation::Multiply(_, _, _) => OPERATION_CODE_MULTIPLY,
-            Operation::Halt => OPERATION_CODE_HALT,
+            Instruction::Add(_, _, _) => OPERATION_CODE_ADD,
+            Instruction::Multiply(_, _, _) => OPERATION_CODE_MULTIPLY,
+            Instruction::Halt => OPERATION_CODE_HALT,
         }
     }
 
@@ -99,7 +104,7 @@ impl Operation {
         let is_add = match code {
             OPERATION_CODE_ADD => true,
             OPERATION_CODE_MULTIPLY => false,
-            OPERATION_CODE_HALT => return Ok(Operation::Halt),
+            OPERATION_CODE_HALT => return Ok(Instruction::Halt),
             _ => return Err(anyhow!("Operation::decode unknown opcode {}", code)),
         };
 
@@ -110,41 +115,71 @@ impl Operation {
         );
 
         Ok((if is_add {
-            Operation::Add
+            Instruction::Add
         } else {
-            Operation::Multiply
+            Instruction::Multiply
         })(lhs_at, rhs_at, output_at))
     }
 
     /// Returns true for a `HALT` opcode.
     pub fn apply(&self, memory: &mut dyn Memory) -> Result<bool> {
         Ok(match *self {
-            Operation::Add(lhs_at, rhs_at, output_at) => {
+            Instruction::Add(lhs_at, rhs_at, output_at) => {
                 let (lhs, rhs) = (memory.get_scalar_at(lhs_at)?, memory.get_scalar_at(rhs_at)?);
                 let result = lhs + rhs;
                 memory.set_scalar_at(output_at, result)?;
                 false
             }
-            Operation::Multiply(lhs_at, rhs_at, output_at) => {
+            Instruction::Multiply(lhs_at, rhs_at, output_at) => {
                 let (lhs, rhs) = (memory.get_scalar_at(lhs_at)?, memory.get_scalar_at(rhs_at)?);
                 let result = lhs * rhs;
                 memory.set_scalar_at(output_at, result)?;
                 false
             }
-            Operation::Halt => true,
+            Instruction::Halt => true,
         })
     }
 }
 
+fn compute_solution_1(tape: &[Scalar]) -> Result<Scalar> {
+    let mut vm = VirtualMachine::from_tape(tape);
+    vm.run()?;
+    vm.memory_snapshot().get_scalar_at(0)
+}
+
+const COMPUTE_SOLUTION_2_TARGET: Scalar = 19690720;
+
+fn compute_solution_2(tape: &[Scalar]) -> Result<Scalar> {
+    // brute-force
+    let mut vm = VirtualMachine::from_tape(&[]);
+    for noun in 0..100 {
+        for verb in 0..100 {
+            let mut vm_tape = tape.to_vec();
+            *vm_tape.get_mut(1).unwrap() = noun;
+            *vm_tape.get_mut(2).unwrap() = verb;
+            vm.reset(&vm_tape);
+            vm.run()?;
+            if vm.memory_snapshot().get_scalar_at(0)? == COMPUTE_SOLUTION_2_TARGET {
+                return Ok(100 * noun + verb);
+            }
+        }
+    }
+
+    Err(anyhow!(
+        "compute_solution_2: could not find solution in problem space"
+    ))
+}
+
 fn main() -> Result<()> {
+    // Part 1
     run_with_scaffolding("day-2", b',', |mut tape| {
         *tape.get_mut(1).unwrap() = 12;
         *tape.get_mut(2).unwrap() = 2;
-
-        let mut vm = VirtualMachine::from_tape(tape);
-        vm.run()?;
-        vm.memory_snapshot().get_scalar_at(0)
+        compute_solution_1(&tape)
     })?;
+
+    // Part 2
+    run_with_scaffolding("day-2", b',', |mut tape| compute_solution_2(&tape))?;
 
     Ok(())
 }
@@ -155,42 +190,42 @@ mod tests {
 
     #[test]
     fn test_virtual_machine_stepping() {
-        let tape_1 = vec![1, 9, 10, 3, 2, 3, 11, 0, 99, 30, 40, 50];
-        let mut vm = VirtualMachine::from_tape(tape_1.clone());
+        let tape_1 = [1, 9, 10, 3, 2, 3, 11, 0, 99, 30, 40, 50];
+        let mut vm = VirtualMachine::from_tape(&tape_1);
         assert_eq!(vm.memory_snapshot(), &tape_1);
 
-        let tape_2 = vec![1, 9, 10, 70, 2, 3, 11, 0, 99, 30, 40, 50];
+        let tape_2 = [1, 9, 10, 70, 2, 3, 11, 0, 99, 30, 40, 50];
         vm.step().unwrap();
         assert_eq!(vm.memory_snapshot(), &tape_2);
 
-        let tape_3 = vec![3500, 9, 10, 70, 2, 3, 11, 0, 99, 30, 40, 50];
+        let tape_3 = [3500, 9, 10, 70, 2, 3, 11, 0, 99, 30, 40, 50];
         vm.step().unwrap();
         assert_eq!(vm.memory_snapshot(), &tape_3);
     }
 
     #[test]
     fn test_virtual_machine_running() {
-        let mut vm1 = VirtualMachine::from_tape(vec![1, 0, 0, 0, 99]);
+        let mut vm1 = VirtualMachine::from_tape(&[1, 0, 0, 0, 99]);
         vm1.run().unwrap();
-        assert_eq!(vm1.memory_snapshot(), &vec![2, 0, 0, 0, 99]);
+        assert_eq!(vm1.memory_snapshot(), &[2, 0, 0, 0, 99]);
 
-        let mut vm2 = VirtualMachine::from_tape(vec![2, 3, 0, 3, 99]);
+        let mut vm2 = VirtualMachine::from_tape(&[2, 3, 0, 3, 99]);
         vm2.run().unwrap();
-        assert_eq!(vm2.memory_snapshot(), &vec![2, 3, 0, 6, 99]);
+        assert_eq!(vm2.memory_snapshot(), &[2, 3, 0, 6, 99]);
 
-        let mut vm3 = VirtualMachine::from_tape(vec![2, 4, 4, 5, 99, 0]);
+        let mut vm3 = VirtualMachine::from_tape(&[2, 4, 4, 5, 99, 0]);
         vm3.run().unwrap();
-        assert_eq!(vm3.memory_snapshot(), &vec![2, 4, 4, 5, 99, 9801]);
+        assert_eq!(vm3.memory_snapshot(), &[2, 4, 4, 5, 99, 9801]);
 
-        let mut vm4 = VirtualMachine::from_tape(vec![1, 1, 1, 4, 99, 5, 6, 0, 99]);
+        let mut vm4 = VirtualMachine::from_tape(&[1, 1, 1, 4, 99, 5, 6, 0, 99]);
         vm4.run().unwrap();
-        assert_eq!(vm4.memory_snapshot(), &vec![30, 1, 1, 4, 2, 5, 6, 0, 99]);
+        assert_eq!(vm4.memory_snapshot(), &[30, 1, 1, 4, 2, 5, 6, 0, 99]);
     }
 
     #[test]
     fn test_virtual_machine_bug() {
-        let tape_1 = vec![1, 1, 1, 4, 99, 5, 6, 0, 99];
-        let mut vm = VirtualMachine::from_tape(tape_1.clone());
+        let tape_1 = [1, 1, 1, 4, 99, 5, 6, 0, 99];
+        let mut vm = VirtualMachine::from_tape(&tape_1);
         assert_eq!(vm.program_counter_snapshot(), 0);
         assert_eq!(vm.memory_snapshot(), &tape_1);
 
