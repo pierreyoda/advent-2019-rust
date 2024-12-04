@@ -16,6 +16,10 @@ path = "src/day-1/main.rs"
 name = "day-2"
 path = "src/day-2/main.rs"
 
+[[bin]]
+name = "day-3"
+path = "src/day-3/main.rs"
+
 [dependencies]
 anyhow = "1.0.93"
 colored = "2.1.0"
