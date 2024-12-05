@@ -79,7 +79,8 @@ struct Wire {
     directions: Vec<WireOffsetPosition>,
 }
 
-type WirePath = HashMap<WireMapVector2, bool>;
+/// Structure: (coordinates, steps_from_origin)
+type WirePath = HashMap<WireMapVector2, u32>;
 
 impl TryFrom<String> for Wire {
     type Error = Error;
@@ -113,12 +114,14 @@ impl Wire {
     pub fn compute_path(&self, origin: WireMapVector2) -> WirePath {
         let mut current = origin.clone();
         let mut path = WirePath::with_capacity(1 + self.directions.len());
-        path.insert(current, true);
+        path.insert(current, 0);
+        let mut steps = 0;
         for direction in &self.directions {
             let direction_unit_vector = direction.as_unit_vector();
             for _ in 0..direction.length {
+                steps += 1;
                 current = current + direction_unit_vector;
-                path.insert(current, true);
+                path.insert(current, steps);
             }
         }
         path
@@ -148,6 +151,25 @@ fn compute_solution_1(wire1: Wire, wire2: Wire) -> Result<u32> {
     }
 }
 
+fn compute_solution_2(wire1: Wire, wire2: Wire) -> Result<u32> {
+    let origin = WireMapVector2 { x: 0, y: 0 };
+    let path1 = wire1.compute_path(origin);
+    let path2 = wire2.compute_path(origin);
+    let mut intersections_steps: Vec<u32> = vec![];
+    for (position1, position1_steps) in path1.iter() {
+        if let Some(position2_steps) = path2.get(position1) {
+            intersections_steps.push(position1_steps + position2_steps);
+        }
+    }
+
+    if intersections_steps.is_empty() {
+        Err(anyhow!("compute_solution_2: no intersections found"))
+    } else {
+        intersections_steps.sort();
+        Ok(intersections_steps[1]) // skip origin intersection
+    }
+}
+
 fn main() -> Result<()> {
     // Part 1
     run_day_puzzle_solver(3, DayPuzzlePart::One, b'\n', |input: Vec<Wire>| {
@@ -156,12 +178,21 @@ fn main() -> Result<()> {
         compute_solution_1(wire1, wire2)
     })?;
 
+    // Part 2
+    run_day_puzzle_solver(3, DayPuzzlePart::Two, b'\n', |input: Vec<Wire>| {
+        let wire1 = input[0].clone();
+        let wire2 = input[1].clone();
+        compute_solution_2(wire1, wire2)
+    })?;
+
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{compute_solution_1, Wire, WireDirection::*, WireOffsetPosition};
+    use crate::{
+        compute_solution_1, compute_solution_2, Wire, WireDirection::*, WireOffsetPosition,
+    };
 
     #[test]
     fn test_compute_day_3_short_wire_path() {
@@ -222,6 +253,17 @@ mod tests {
         assert_eq!(
             compute_solution_1(path_1_wire_1, path_1_wire_2).unwrap(),
             159
+        );
+    }
+
+    #[test]
+    fn test_compute_day_3_solution_2() {
+        let path_1_wire_1 =
+            Wire::try_from("R75,D30,R83,U83,L12,D49,R71,U7,L72".to_string()).unwrap();
+        let path_1_wire_2 = Wire::try_from("U62,R66,U55,R34,D71,R55,D58,R83".to_string()).unwrap();
+        assert_eq!(
+            compute_solution_2(path_1_wire_1, path_1_wire_2).unwrap(),
+            610
         );
     }
 }
