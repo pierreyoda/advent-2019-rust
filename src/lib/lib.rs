@@ -28,7 +28,11 @@ where
                 i
             )
         })?;
-        parsed_lines.push(T::try_from(raw_line)?);
+        let trimmed_raw_line = raw_line.trim();
+        if trimmed_raw_line.is_empty() {
+            continue;
+        }
+        parsed_lines.push(T::try_from(trimmed_raw_line.to_string())?);
     }
     Ok(parsed_lines)
 }
