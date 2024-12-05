@@ -56,7 +56,7 @@ mod tests {
     use crate::{compute_compounded_fuel_requirements, compute_fuel_requirements};
 
     #[test]
-    fn test_compute_fuel_requirements() {
+    fn test_day_1_compute_fuel_requirements() {
         assert_eq!(compute_fuel_requirements(12), 2);
         assert_eq!(compute_fuel_requirements(14), 2);
         assert_eq!(compute_fuel_requirements(1969), 654);
@@ -64,7 +64,7 @@ mod tests {
     }
 
     #[test]
-    fn test_compute_compounded_fuel_requirements() {
+    fn test_day_1_compute_compounded_fuel_requirements() {
         assert_eq!(compute_compounded_fuel_requirements(14), 2);
         assert_eq!(compute_compounded_fuel_requirements(1969), 966);
         assert_eq!(compute_compounded_fuel_requirements(100756), 50346);

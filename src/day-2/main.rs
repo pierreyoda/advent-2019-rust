@@ -215,7 +215,7 @@ mod tests {
     use crate::VirtualMachine;
 
     #[test]
-    fn test_virtual_machine_stepping() {
+    fn test_day_2_virtual_machine_stepping() {
         let tape_1 = [1, 9, 10, 3, 2, 3, 11, 0, 99, 30, 40, 50];
         let mut vm = VirtualMachine::from_tape(&tape_1);
         assert_eq!(vm.memory_snapshot().raw(), &tape_1);
@@ -230,7 +230,7 @@ mod tests {
     }
 
     #[test]
-    fn test_virtual_machine_running() {
+    fn test_day_2_virtual_machine_running() {
         let mut vm1 = VirtualMachine::from_tape(&[1, 0, 0, 0, 99]);
         vm1.run().unwrap();
         assert_eq!(vm1.memory_snapshot().raw(), &[2, 0, 0, 0, 99]);
@@ -249,7 +249,7 @@ mod tests {
     }
 
     #[test]
-    fn test_virtual_machine_bug() {
+    fn test_day_2_virtual_machine_bug() {
         let tape_1 = [1, 1, 1, 4, 99, 5, 6, 0, 99];
         let mut vm = VirtualMachine::from_tape(&tape_1);
         assert_eq!(vm.program_counter_snapshot(), 0);
