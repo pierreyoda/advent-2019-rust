@@ -202,7 +202,7 @@ fn main() -> Result<()> {
     })?;
 
     // Part 2
-    let _ = run_day_puzzle_solver(2, DayPuzzlePart::One, b'\n', |input: Vec<MemoryBank>| {
+    let _ = run_day_puzzle_solver(2, DayPuzzlePart::Two, b'\n', |input: Vec<MemoryBank>| {
         let memory_bank = input[0].clone();
         Ok(compute_solution_2(memory_bank.raw()))
     })?;
