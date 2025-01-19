@@ -1,5 +1,5 @@
 [package]
-name = "advent-2019"
+name = "advent_2019"
 version = "0.1.0"
 authors = ["pierreyoda@users.noreply.github.com"]
 edition = "2021"
@@ -26,4 +26,4 @@ path = "src/day-5/main.rs"
 
 [dependencies]
 anyhow = "1.0.94"
-colored = "2.2.0"
+colored = "3.0.0"
