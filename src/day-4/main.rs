@@ -41,9 +41,10 @@ pub enum PasswordValidationResult {
     NoTwoAdjacentDigits,
     SuccessiveDigitsDecrease,
     // Part 2
-    NoDigitsPair,
     TooManySuccessiveDigits,
 }
+
+const PASSWORD_EXPECTED_LENGTH: usize = 6;
 
 #[derive(Debug)]
 struct Password {
@@ -57,88 +58,97 @@ impl Password {
     }
 
     pub fn validate(&self, part: DayPuzzlePart) -> PasswordValidationResult {
-        if self.raw.len() != 6 {
+        if self.raw.len() != PASSWORD_EXPECTED_LENGTH {
             return PasswordValidationResult::IncorrectLength(self.raw.len());
         }
 
-        let mut more_than_two_adjacent_digits = false;
-        let mut adjacent_digits_encountered = false;
-        let mut at_least_one_pair_digit = None;
-        let raw_chars: Vec<char> = self.raw.chars().collect();
-        for (i, letter) in raw_chars.iter().enumerate() {
-            let digit: PasswordScalar = letter.to_digit(10).expect(&format!(
-                "password validation: cannot parse digit: {}",
-                letter
-            ));
-
-            match raw_chars.get(i + 1) {
-                Some(next_letter) if next_letter == letter => {
-                    match at_least_one_pair_digit {
-                        Some(pair_letter) if pair_letter == letter => {
-                            more_than_two_adjacent_digits = true;
-                        }
-                        _ => match raw_chars.get(i + 2) {
-                            Some(l) if l != next_letter => at_least_one_pair_digit = Some(letter),
-                            Some(l) if l == next_letter => more_than_two_adjacent_digits = true,
-                            _ => (),
-                        },
-                    }
-                    adjacent_digits_encountered = true;
-                }
-                Some(next_letter) => {
-                    let next_digit: PasswordScalar = next_letter.to_digit(10).expect(&format!(
-                        "password validation: cannot parse digit: {}",
-                        letter
-                    ));
-                    if next_digit < digit {
-                        return PasswordValidationResult::SuccessiveDigitsDecrease;
-                    }
-                }
-                None => (),
+        fn parse_digit(raw_digit: Option<&char>) -> Option<PasswordScalar> {
+            match raw_digit {
+                Some(r) => Some(
+                    r.to_digit(10)
+                        .expect(&format!("password validation: cannot parse digit: {}", r)),
+                ),
+                None => None,
             }
         }
-        if !adjacent_digits_encountered {
-            return PasswordValidationResult::NoTwoAdjacentDigits;
+
+        // println!("\n\np={}", self.raw);
+        let raw_chars: Vec<char> = self.raw.chars().collect();
+        let (mut at_least_one_pair_digit, mut more_than_two_adjacent_digits) = (false, false);
+        let mut iter = raw_chars.iter().enumerate();
+        while let Some((i, c0)) = iter.next() {
+            let d0 = parse_digit(Some(c0));
+            let d1 = parse_digit(raw_chars.get(i + 1));
+            let d2 = parse_digit(raw_chars.get(i + 2));
+
+            // println!("d0={:?}\td1={:?}\td2={:?}", d0, d1, d2);
+            if d1.is_some() && d1 < d0 {
+                return PasswordValidationResult::SuccessiveDigitsDecrease;
+            }
+
+            if d1 != d0 {
+                continue;
+            }
+
+            if d2 != d0 {
+                at_least_one_pair_digit = true;
+                continue;
+            }
+
+            'inner: while let Some((j, c)) = iter.next() {
+                // println!("j={}\t\tloop={:?}", j, parse_digit(Some(c)));
+                let d = parse_digit(Some(c));
+                if d != d0 || parse_digit(raw_chars.get(j + 1)) != d {
+                    break 'inner;
+                }
+                more_than_two_adjacent_digits = true;
+            }
         }
+
+        // println!(
+        //     "for={},\t\t\tat_least_one_pair_digit={};more_than_two_adjacent_digits={}",
+        //     self.raw, at_least_one_pair_digit, more_than_two_adjacent_digits
+        // );
+
         if part == DayPuzzlePart::Two {
-            match (
-                at_least_one_pair_digit.is_some(),
-                more_than_two_adjacent_digits,
-            ) {
-                (false, _) => return PasswordValidationResult::NoDigitsPair,
-                (true, true) => return PasswordValidationResult::TooManySuccessiveDigits,
-                _ => (),
-            };
+            if !at_least_one_pair_digit {
+                if more_than_two_adjacent_digits {
+                    return PasswordValidationResult::TooManySuccessiveDigits;
+                }
+                return PasswordValidationResult::NoTwoAdjacentDigits;
+            }
+        }
+
+        if !at_least_one_pair_digit && !more_than_two_adjacent_digits {
+            return PasswordValidationResult::NoTwoAdjacentDigits;
         }
 
         PasswordValidationResult::Valid
     }
 }
 
-fn compute_solution_1(passwords_range: PasswordsRange) -> Result<usize> {
+fn compute_solution_for_part(
+    passwords_range: PasswordsRange,
+    part: DayPuzzlePart,
+) -> Result<usize> {
     let valid_passwords: Vec<u32> = (passwords_range.min..passwords_range.max)
         .filter(|digits_password| {
             Password {
                 raw: digits_password.to_string(),
                 parsed: *digits_password,
             }
-            .is_valid(DayPuzzlePart::One)
+            .is_valid(part)
         })
         .collect();
     Ok(valid_passwords.len())
 }
 
+fn compute_solution_1(passwords_range: PasswordsRange) -> Result<usize> {
+    compute_solution_for_part(passwords_range, DayPuzzlePart::One)
+}
+
 fn compute_solution_2(passwords_range: PasswordsRange) -> Result<usize> {
-    let valid_passwords: Vec<u32> = (passwords_range.min..passwords_range.max)
-        .filter(|digits_password| {
-            Password {
-                raw: digits_password.to_string(),
-                parsed: *digits_password,
-            }
-            .is_valid(DayPuzzlePart::Two)
-        })
-        .collect();
-    Ok(valid_passwords.len())
+    compute_solution_for_part(passwords_range, DayPuzzlePart::Two)
 }
 
 fn main() -> Result<()> {
@@ -208,7 +218,7 @@ mod tests {
         let testing_pairs = [
             (112233, PasswordValidationResult::Valid),
             (12345, PasswordValidationResult::IncorrectLength(5)),
-            (123444, PasswordValidationResult::NoDigitsPair),
+            (123444, PasswordValidationResult::TooManySuccessiveDigits),
             (111234, PasswordValidationResult::TooManySuccessiveDigits),
             (111122, PasswordValidationResult::Valid),
             (223450, PasswordValidationResult::SuccessiveDigitsDecrease),

@@ -37,7 +37,7 @@ where
     Ok(parsed_lines)
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DayPuzzlePart {
     One,
     Two,
